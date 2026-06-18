@@ -551,6 +551,12 @@ with gr.Blocks(
         }'''
     )
 
+    gr.Markdown(
+        "<div style='text-align: center; margin-top: 30px; font-size: 0.8em; opacity: 0.5;'>"
+        "Projet Open Source hébergé sur <a href='https://github.com/sebedard-creator/leffet_pompeux' target='_blank' style='color: #00e5ff; text-decoration: none;'>GitHub</a>"
+        "</div>"
+    )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # POINT D'ENTRÉE
