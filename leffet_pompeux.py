@@ -20,29 +20,29 @@ os.makedirs(LOCAL_TEMP_DIR, exist_ok=True)
 # Forcer Gradio a stocker les uploads dans notre dossier
 os.environ["GRADIO_TEMP_DIR"] = LOCAL_TEMP_DIR
 
-print("[DEBUG] Import de Numpy...")
+print("[DEBUG] Import de Numpy...", flush=True)
 import numpy as np
 
-print("[DEBUG] Import de Soundfile...")
+print("[DEBUG] Import de Soundfile...", flush=True)
 import soundfile as sf
 
-print("[DEBUG] Import de Librosa...")
+print("[DEBUG] Import de Librosa...", flush=True)
 import librosa
 
-print("[DEBUG] Import de SciPy...")
+print("[DEBUG] Import de SciPy...", flush=True)
 from scipy.signal import butter, sosfilt
 
-print("[DEBUG] Import de Pedalboard...")
+print("[DEBUG] Import de Pedalboard...", flush=True)
 from pedalboard import Pedalboard, Compressor, Limiter
 
-print("[DEBUG] Import de Matplotlib...")
+print("[DEBUG] Import de Matplotlib...", flush=True)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-print("[DEBUG] Import de Gradio...")
+print("[DEBUG] Import de Gradio...", flush=True)
 import gradio as gr
-print("[DEBUG] Tous les imports ont reussi !")
+print("[DEBUG] Tous les imports ont reussi !", flush=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
