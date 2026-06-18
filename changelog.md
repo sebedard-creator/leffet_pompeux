@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.17] - 2026-06-18
+### Ajouts et Modifications
+- **Fix Render.com (Erreur 132 SIGILL)** : 
+  - La librairie `pedalboard` (Spotify) a été **complètement supprimée** de l'application et retirée des dépendances. Elle requérait des instructions processeurs AVX/AVX2 modernes, ce qui provoquait un plantage instantané du serveur sur l'offre gratuite de Render.com (processeurs virtuels anciens).
+- **Nouveau Master Bus (NumPy)** :
+  - Le compresseur de "Glue" et le Limiteur Brickwall de Pedalboard ont été remplacés par notre propre algorithme en pur **NumPy**.
+  - **Glue Compressor** : Remplacé par un algorithme de *Soft Clipping Mathématique* (`np.tanh`) avec un drive interne de +1.5dB pour donner une chaleur et une saturation caractéristiques de la French Touch, unifiant le mix.
+  - **Limiteur Brickwall** : Remplacé par un hard/soft clip limitant strictement le signal à `-0.1 dBFS`.
+- L'application est désormais 100% stable sur n'importe quel hébergeur Cloud sans nécessiter d'instructions CPU particulières.
+
+
+
 ## [v1.16] - 2026-06-18
 ### Ajouts et Modifications
 - **Compatibilité Cloud (Render.com)** :

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════╗
-║           L'effet Pompeux v1.16 🎛️                       ║
+║           L'effet Pompeux v1.17 🎛️                       ║
 ║   Sidechain PHATNESS Compression                         ║
 ║   Réseau local (LAN) & Cloud (Render.com)                ║
 ╚══════════════════════════════════════════════════════════╝
@@ -20,29 +20,14 @@ os.makedirs(LOCAL_TEMP_DIR, exist_ok=True)
 # Forcer Gradio a stocker les uploads dans notre dossier
 os.environ["GRADIO_TEMP_DIR"] = LOCAL_TEMP_DIR
 
-print("[DEBUG] Import de Numpy...", flush=True)
 import numpy as np
-
-print("[DEBUG] Import de Soundfile...", flush=True)
 import soundfile as sf
-
-print("[DEBUG] Import de Librosa...", flush=True)
 import librosa
-
-print("[DEBUG] Import de SciPy...", flush=True)
 from scipy.signal import butter, sosfilt
-
-print("[DEBUG] Import de Pedalboard...", flush=True)
-from pedalboard import Pedalboard, Compressor, Limiter
-
-print("[DEBUG] Import de Matplotlib...", flush=True)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
-print("[DEBUG] Import de Gradio...", flush=True)
 import gradio as gr
-print("[DEBUG] Tous les imports ont reussi !", flush=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -234,28 +219,19 @@ def process_audio(
         if peak > 0.99:
             mixed = (mixed * (0.99 / peak)).astype(np.float32)
 
-        # ── ÉTAPE 8 : Chaîne Master Bus ─────────────────────────────────────
-        plugins = []
+        # ── ÉTAPE 8 : Chaîne Master Bus (NumPy) ─────────────────────────────
         if use_compressor:
-            # Glue compressor : légère colle, ratio doux
-            plugins.append(Compressor(
-                threshold_db=-12.0,
-                ratio=2.0,
-                attack_ms=5.0,
-                release_ms=100.0
-            ))
-        if use_limiter:
-            # Limiteur Brickwall strict à -0.1 dBFS
-            plugins.append(Limiter(
-                threshold_db=-0.1,
-                release_ms=50.0
-            ))
+            # Glue compressor mathématique : ajoute +1.5 dB de gain et sature doucement (Saturateur / Soft Clip)
+            drive_linear = 10 ** (1.5 / 20.0)
+            mixed = np.tanh(mixed * drive_linear)
 
-        if plugins:
-            board     = Pedalboard(plugins)
-            processed = board(mixed, TARGET_SR).astype(np.float32)
-        else:
-            processed = mixed
+        if use_limiter:
+            # Limiteur Brickwall mathématique à -0.1 dBFS
+            limit_level = 10 ** (-0.1 / 20.0)
+            # Soft clip respectant strictement le seuil
+            mixed = limit_level * np.tanh(mixed / limit_level)
+
+        processed = mixed.astype(np.float32)
 
         # ── Métriques GR ─────────────────────────────────────────────────────
         min_gain = float(np.min(gain_curve))
@@ -423,7 +399,7 @@ body                          { background: #0d0d1c !important; }
 """
 
 with gr.Blocks(
-    title="L'effet Pompeux v1.16",
+    title="L'effet Pompeux v1.17",
     theme=gr.themes.Base(
         primary_hue="cyan",
         secondary_hue="slate",
@@ -491,7 +467,7 @@ with gr.Blocks(
                     with gr.Column(elem_id="center-title-box"):
                         gr.Markdown("# 🎛️ L'effet Pompeux", elem_classes="app-title")
                         gr.Markdown(
-                            "*Sidechain PHATNESS Compression*<br><span style='font-size: 0.85em; opacity: 0.6;'>v1.16</span>",
+                            "*Sidechain PHATNESS Compression*<br><span style='font-size: 0.85em; opacity: 0.6;'>v1.17</span>",
                             elem_classes="app-subtitle"
                         )
                     
@@ -583,7 +559,7 @@ with gr.Blocks(
 if __name__ == "__main__":
     print()
     print("------------------------------------------------")
-    print("|        L'effet Pompeux v1.16                 |")
+    print("|        L'effet Pompeux v1.17                 |")
     print("|   Sidechain PHATNESS Compression             |")
     print("|   Demarrage du serveur Gradio (Cloud/LAN)... |")
     print("------------------------------------------------")

@@ -1,11 +1,11 @@
-# L'effet Pompeux v1.16 — Technical Documentation
+# L'effet Pompeux v1.17 — Technical Documentation
 
 ## 1. Project Description
 "L'effet Pompeux" is a web-based audio mastering application designed to recreate the aggressive sidechain compression effect ("pumping") famously used in electronic music (EDM, French Touch, House). Originally built for local network (LAN) use, it is now fully adapted for Cloud deployment (e.g., Render.com) with multi-user isolation.
 
 ## 2. Technical Features
 - **Framework:** Gradio (Python)
-- **DSP Engine:** Vectorized processing via NumPy + Pedalboard for minimal latency.
+- **DSP Engine:** 100% Vectorized processing via pure NumPy and SciPy for minimal latency and maximum cloud compatibility (No AVX instructions required).
 - **Output Standard:** Forced export to WAV 48 kHz / 24-bit.
 - **Precision:** Internal 32-bit float calculations to preserve dynamic range.
 - **Cloud-Ready:** Dynamic port binding (`PORT` env variable, defaults to `7861`), secure file management with UUIDs, and safe cache clearing.
@@ -65,10 +65,10 @@ The tool follows a strict 11-step processing chain:
   9. Auto-Leveling (Normalization if peak > 0 dBFS before mastering)
       │
       ▼
- 10. Glue Compressor (Pedalboard — optional)
+ 10. Glue Compressor (NumPy Mathematical Soft Clipper/Saturator — optional)
       │
       ▼
- 11. Brickwall Limiter at -0.1 dBFS (Pedalboard — optional)
+ 11. Brickwall Limiter at -0.1 dBFS (NumPy — optional)
       │
       ▼
 [WAV 48 kHz / 24-bit]
