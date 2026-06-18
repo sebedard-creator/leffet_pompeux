@@ -9,8 +9,8 @@
 
 import os
 import time
-import warnings
 import uuid
+import warnings
 warnings.filterwarnings("ignore")
 
 # --- Configuration du dossier local pour les fichiers ---
@@ -19,15 +19,30 @@ LOCAL_TEMP_DIR = os.path.join(BASE_DIR, "fichiers_audio")
 os.makedirs(LOCAL_TEMP_DIR, exist_ok=True)
 # Forcer Gradio a stocker les uploads dans notre dossier
 os.environ["GRADIO_TEMP_DIR"] = LOCAL_TEMP_DIR
+
+print("[DEBUG] Import de Numpy...")
 import numpy as np
+
+print("[DEBUG] Import de Soundfile...")
 import soundfile as sf
+
+print("[DEBUG] Import de Librosa...")
 import librosa
+
+print("[DEBUG] Import de SciPy...")
 from scipy.signal import butter, sosfilt
+
+print("[DEBUG] Import de Pedalboard...")
 from pedalboard import Pedalboard, Compressor, Limiter
+
+print("[DEBUG] Import de Matplotlib...")
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+print("[DEBUG] Import de Gradio...")
 import gradio as gr
+print("[DEBUG] Tous les imports ont reussi !")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
