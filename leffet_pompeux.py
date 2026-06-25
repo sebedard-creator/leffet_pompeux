@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════╗
-║           L'effet Pompeux v1.17 🎛️                       ║
+║           L'effet Pompeux v2.0 🎛️                        ║
 ║   Sidechain PHATNESS Compression                         ║
 ║   Réseau local (LAN) & Cloud (Render.com)                ║
 ╚══════════════════════════════════════════════════════════╝
@@ -160,8 +160,7 @@ def process_audio(
     comp_amount:    float,   # 0–100 %
     attack_ms:      float,
     release_ms:     float,
-    wet_dry_pct:    float,   # 0–100 %
-    sc_vol_pct:     float,   # 0-150 %
+    sc_vol_pct:     float,   # 0-100 %
     use_compressor: bool,
     use_limiter:    bool,
     preview_start_s: float
@@ -190,29 +189,42 @@ def process_audio(
             sc = main.copy()   # Sidechain interne
 
         # ── ÉTAPE 3 : Conditionnement du Trigger (chemin sidechain) ──────────
-        sc_mono    = np.mean(sc, axis=0)                 # Mixage mono
-        sc_filtered = butter_lowpass(sc_mono, cutoff_hz) # Isolation des basses
-        sc_trigger  = sc_filtered * float(bass_gain)     # Amplification
+        sc_mono     = np.mean(sc, axis=0)                 # Mixage mono
+        sc_filtered = butter_lowpass(sc_mono, cutoff_hz)  # Isolation des basses
+        
+        # 1. Normalisation globale du signal filtré à 1.0
+        sc_peak = float(np.max(np.abs(sc_filtered)))
+        if sc_peak > 1e-9:
+            sc_filtered = sc_filtered / sc_peak
+            
+        # 2. Application du Bass Gain (Drive) et Saturation Douce (Soft Clip)
+        # On utilise np.tanh au lieu d'un hard clip (np.clip). Cela transforme
+        # la distorsion numérique agressive en une saturation analogique chaude (Overdrive).
+        sc_trigger  = np.tanh(sc_filtered * float(bass_gain)).astype(np.float32)
 
         # ── ÉTAPE 4 : Détection d'Enveloppe ─────────────────────────────────
         envelope = envelope_follower(sc_trigger, attack_ms, release_ms)
 
-        # Normalisation 0→1
-        env_peak = float(np.max(envelope))
-        env_norm = envelope / env_peak if env_peak > 1e-9 else envelope
+        # ── ÉTAPE 4.5 : Normalisation de sécurité ────────────────────────────
+        env_norm = np.clip(envelope, 0.0, 1.0).astype(np.float32)
 
-        # ── ÉTAPE 5 : Ducking (réduction de gain stéréo liée) ────────────────
-        depth      = comp_amount / 100.0
-        gain_curve = np.clip(1.0 - env_norm * depth, 0.0, 1.0).astype(np.float32)
-        ducked     = main * gain_curve[np.newaxis, :]    # Broadcast L+R identique
+        # ── ÉTAPE 5 : Ducking (Création de la piste totalement compressée) ───
+        # On crée une piste duckée au maximum (-48 dB). Le dosage se fera via Mix 1.
+        max_gr_db  = -48.0
+        gr_db      = env_norm * max_gr_db
+        gain_curve = (10 ** (gr_db / 20.0)).astype(np.float32)
+        ducked_A   = main * gain_curve[np.newaxis, :]
 
-        # ── ÉTAPE 6 : Mélange Wet/Dry ────────────────────────────────────────
-        wet   = wet_dry_pct / 100.0
-        mixed = (wet * ducked + (1.0 - wet) * main).astype(np.float32)
+        # ── ÉTAPE 6 : Mix 1 (Compression Amount) ─────────────────────────────
+        # Crossfade entre la source originale (0%) et la source compressée (100%)
+        comp_mix = comp_amount / 100.0
+        mix_1 = (main * (1.0 - comp_mix) + ducked_A * comp_mix).astype(np.float32)
 
-        # ── ÉTAPE 6.5 : Réinjection du Sidechain ────────────────────────────
-        if sc_path is not None:
-            mixed = mixed + (sc * (sc_vol_pct / 100.0)).astype(np.float32)
+        # ── ÉTAPE 7 : Mix 2 (Sidechain Volume) ───────────────────────────────
+        # Crossfade entre le Mix 1 (0%) et le Trigger de Sidechain pur (100%)
+        sc_vol_mix = sc_vol_pct / 100.0
+        sc_trigger_stereo = np.tile(sc_trigger, (2, 1)).astype(np.float32)
+        mixed = (mix_1 * (1.0 - sc_vol_mix) + sc_trigger_stereo * sc_vol_mix).astype(np.float32)
 
         # ── ÉTAPE 7 : Auto-Leveling (Headroom) ──────────────────────────────
         peak = float(np.max(np.abs(mixed)))
@@ -221,9 +233,27 @@ def process_audio(
 
         # ── ÉTAPE 8 : Chaîne Master Bus (NumPy) ─────────────────────────────
         if use_compressor:
-            # Glue compressor mathématique : ajoute +1.5 dB de gain et sature doucement (Saturateur / Soft Clip)
-            drive_linear = 10 ** (1.5 / 20.0)
-            mixed = np.tanh(mixed * drive_linear)
+            # Véritable compresseur de bus (Type 2:1, remplace le saturateur)
+            comp_thresh_db = -12.0
+            comp_ratio = 2.0
+            comp_attack_ms = 5.0
+            comp_release_ms = 100.0
+            
+            # 1. Enveloppe du signal principal
+            mix_mono = np.mean(mixed, axis=0)
+            mix_env = envelope_follower(mix_mono, comp_attack_ms, comp_release_ms)
+            
+            # 2. Conversion dB et Dépassement
+            mix_env_db = 20.0 * np.log10(mix_env + 1e-9)
+            overshoot_db = np.maximum(0.0, mix_env_db - comp_thresh_db)
+            
+            # 3. Réduction de gain statique (GR) selon le Ratio
+            comp_gr_db = -overshoot_db * (1.0 - 1.0 / comp_ratio)
+            
+            # 4. Application du gain avec Makeup (+2dB)
+            comp_makeup_db = 2.0
+            comp_gain_linear = (10 ** ((comp_gr_db + comp_makeup_db) / 20.0)).astype(np.float32)
+            mixed = mixed * comp_gain_linear[np.newaxis, :]
 
         if use_limiter:
             # Limiteur Brickwall mathématique à -0.1 dBFS
@@ -369,11 +399,10 @@ body                          { background: #0d0d1c !important; }
 }
 #tt-cutoff label:hover::before { content: "Détermine la fréquence maximale du filtre Sidechain (Low-Pass). Plus elle est basse, plus le compresseur réagira uniquement aux grosses caisses (Kick) et sous-basses, ignorant les voix ou synthés aigus."; }
 #tt-bass label:hover::before { content: "Booste artificiellement le volume des basses du signal déclencheur avant la détection. Utile si votre kick manque d'impact pour déclencher correctement le pompage."; }
-#tt-comp label:hover::before { content: "Profondeur de l'effet (Ducking). À 100%, la musique sera totalement écrasée lors du kick (pompage extrême). À 30%, l'effet sera plus subtil et naturel."; }
+#tt-comp label:hover::before { content: "Mixage (Crossfade) de l'effet : 0% = Piste originale intacte. 100% = Piste totalement écrasée par le kick (Pompage maximal)."; }
 #tt-attack label:hover::before { content: "Vitesse à laquelle le volume baisse quand le kick frappe. Une attaque courte (< 5ms) écrase le son immédiatement. Une attaque plus longue laisse passer le claquement (transitoire) du kick."; }
 #tt-release label:hover::before { content: "Vitesse à laquelle le son revient à la normale. Un temps trop long étouffera le morceau, un temps trop court créera des saccades brutales. À ajuster selon le tempo (BPM)."; }
-#tt-wetdry label:hover::before { content: "Mixage parallèle : 100% n'envoie que le son avec l'effet Sidechain au maximum. 50% mélange le son d'origine avec le pompage pour conserver de la dynamique (New York Compression)."; }
-#tt-scvol label:hover::before { content: "Volume du signal Sidechain (Kick) réinjecté dans le mix final. À 0%, vous n'entendrez que l'effet de 'trou'. À 100%, le kick viendra remplir l'espace créé par le pompage."; }
+#tt-scvol label:hover::before { content: "Mixage de réinjection (Crossfade) : 0% = Uniquement la piste mixée. 100% = Uniquement le signal des basses fantômes. Permet d'écouter le détecteur ou d'ajouter de la sous-basse au mix."; }
 #tt-glue label:hover::before, #tt-glue legend:hover::before { content: "Ajoute un compresseur de bus type SSL à la fin du traitement. Il 'colle' les éléments de votre mix ensemble avec une légère réduction de gain pour un rendu plus compact et professionnel."; }
 #tt-limit label:hover::before, #tt-limit legend:hover::before { content: "Place un True Peak Brickwall Limiter en bout de chaîne (-0.1 dB). Protège votre fichier exporté contre la saturation (clipping numérique) et maximise le volume RMS perçu."; }
 #tt-prev label:hover::before { content: "Curseur permettant de cibler un moment précis de votre audio (en secondes, et non en %) pour le rendu de l'Aperçu rapide (15 secondes). Utile pour tester l'effet directement sur le refrain ou le drop."; }
@@ -399,7 +428,7 @@ body                          { background: #0d0d1c !important; }
 """
 
 with gr.Blocks(
-    title="L'effet Pompeux v1.17",
+    title="L'effet Pompeux v2.0",
     theme=gr.themes.Base(
         primary_hue="cyan",
         secondary_hue="slate",
@@ -437,9 +466,8 @@ with gr.Blocks(
                         btn_paste = gr.Button("⬇️ Paste to Release", size="sm")
                 with gr.Column():
                     gr.Markdown("##### 🎚️ Mix & Ducking", elem_classes="section-label")
-                    comp_sl   = gr.Slider(0, 100, value=90, step=1, label="Compression Amount (%)", elem_classes="tooltip-item", elem_id="tt-comp")
-                    wetdry_sl = gr.Slider(0, 100, value=100, step=1, label="Wet/Dry Mix (%)", elem_classes="tooltip-item", elem_id="tt-wetdry")
-                    sc_vol_sl = gr.Slider(0, 150, value=100, step=1, label="Sidechain Volume (%)", elem_classes="tooltip-item", elem_id="tt-scvol")
+                    comp_sl   = gr.Slider(0, 100, value=100, step=1, label="Compression Amount (%)", elem_classes="tooltip-item", elem_id="tt-comp")
+                    sc_vol_sl = gr.Slider(0, 100, value=0, step=1, label="Sidechain Volume (%)", elem_classes="tooltip-item", elem_id="tt-scvol")
 
             with gr.Row():
                 with gr.Column(scale=2):
@@ -467,7 +495,7 @@ with gr.Blocks(
                     with gr.Column(elem_id="center-title-box"):
                         gr.Markdown("# 🎛️ L'effet Pompeux", elem_classes="app-title")
                         gr.Markdown(
-                            "*Sidechain PHATNESS Compression*<br><span style='font-size: 0.85em; opacity: 0.6;'>v1.17</span>",
+                            "*Sidechain PHATNESS Compression*<br><span style='font-size: 0.85em; opacity: 0.6;'>v2.0</span>",
                             elem_classes="app-subtitle"
                         )
                     
@@ -493,7 +521,7 @@ with gr.Blocks(
             main_audio_in, sc_audio_in,
             cutoff_sl, bass_sl, comp_sl,
             attack_sl, release_sl,
-            wetdry_sl, sc_vol_sl,
+            sc_vol_sl,
             chk_comp, chk_limit,
             prev_start_sl
         ],
@@ -565,7 +593,7 @@ with gr.Blocks(
 if __name__ == "__main__":
     print()
     print("------------------------------------------------")
-    print("|        L'effet Pompeux v1.17                 |")
+    print("|        L'effet Pompeux v2.0                  |")
     print("|   Sidechain PHATNESS Compression             |")
     print("|   Demarrage du serveur Gradio (Cloud/LAN)... |")
     print("------------------------------------------------")

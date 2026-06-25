@@ -1,4 +1,4 @@
-# L'effet Pompeux v1.17 — Technical Documentation
+# L'effet Pompeux v2.0 — Technical Documentation
 
 ## 1. Project Description
 "L'effet Pompeux" is a web-based audio mastering application designed to recreate the aggressive sidechain compression effect ("pumping") famously used in electronic music (EDM, French Touch, House). Originally built for local network (LAN) use, it is now fully adapted for Cloud deployment (e.g., Render.com) with multi-user isolation.

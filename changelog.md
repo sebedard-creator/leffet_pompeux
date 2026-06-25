@@ -1,5 +1,54 @@
 # Changelog
 
+## [v2.0] - 2026-06-25
+### Ajouts et Modifications
+- **Refonte Majeure de l'Architecture du Signal Audio** :
+  - **Simplification du Mixage :** Le curseur obsolète `Wet/Dry Mix (%)` a été définitivement supprimé pour laisser place à une logique pure et sans ambiguïté basée sur le workflow des producteurs.
+  - **Nouveau rôle pour `Compression Amount (%)` :** Agit dorénavant comme un crossfader parfait entre le fichier original non compressé (0%) et le fichier totalement écrasé par le sidechain (100%).
+  - **Nouveau rôle pour `Sidechain Volume (%)` :** Agit comme un second crossfader permettant de réinjecter le signal du filtre Sidechain (Cutoff + Bass Gain pur) par-dessus le mix. À 100%, l'utilisateur n'entend plus que le filtre Sidechain, ce qui permet de le monitorer précisément ou de l'utiliser comme un générateur de sous-basses parallèle. Par défaut, ce réglage est désormais à 0% pour ne pas brouiller le mix.
+  - **Soft Clipper sur le Bass Gain :** Remplacement de la fonction `np.clip` (Hard Clipping) par `np.tanh` (Soft Clipping). Cela permet d'obtenir une saturation analogique (Overdrive) beaucoup plus chaleureuse lorsque le paramètre Bass Gain est poussé fort (ex: > 1.0), évitant la distorsion numérique agressive (onde carrée).
+
+
+## [v1.23] - 2026-06-25
+### Ajouts et Modifications
+- **Correction du "Ducking" permanent (Audio inaudible)** :
+  - **Problème :** La version 1.21 avait introduit un gain interne artificiel de x10 pour compenser la perte de volume du filtre passe-bas. Cependant, multiplier *tout* le signal des basses par 10 (et parfois 40 avec le Bass Gain) poussait non seulement les kicks, mais aussi toutes les lignes de basse et les bruits de fond au-delà du seuil de 1.0. Résultat : le détecteur d'enveloppe voyait un bloc solide continu à 1.0. Le compresseur ne relâchait jamais la compression (-48dB en permanence), rendant le fichier inaudible.
+  - **Solution :** Suppression du multiplicateur arbitraire x10. À la place, le signal sidechain est désormais *normalisé* globalement à 1.0 juste après le filtrage. Ainsi, le son le plus fort de la piste basse (le kick) vaut exactement 1.0, et les lignes de basses restent naturellement en dessous. Le curseur `Bass Gain` retrouve son utilité parfaite de "Drive" contrôlé, garantissant un pompage rythmique propre sans détruire la dynamique de la piste.
+
+
+
+## [v1.22] - 2026-06-25
+### Ajouts et Modifications
+- **Véritable Compresseur de Master Bus (Glue Compressor)** :
+  - **Refonte DSP :** La version 1.17 avait introduit un compresseur de "Glue" simulé par un saturateur mathématique (Soft Clipper). Sur demande expresse, cette approche a été remplacée par un véritable algorithme de compression numérique.
+  - **Spécifications (Type 2:1) :** Le compresseur de bus (activable via la case `Glue Compressor`) utilise désormais de véritables paramètres de compression : Ratio fixe de 2:1, Seuil à -12 dB, Attaque 5ms et Release 100ms. L'enveloppe est calculée de manière logarithmique (overshoot en dB) pour reproduire fidèlement l'action d'un compresseur de Mastering standard.
+
+
+
+## [v1.21] - 2026-06-25
+### Ajouts et Modifications
+- **Correction d'Amplitude du Trigger (Gain Interne x10)** :
+  - **Problème :** Après la suppression de la normalisation globale, l'effet de compression ne s'activait plus du tout. La raison : le filtre passe-bas (Low-Pass) à 90Hz enlève énormément d'énergie au signal audio. Le volume du kick devenait si faible qu'il n'arrivait jamais à atteindre le seuil de 1.0 pour déclencher le Ducking.
+  - **Solution :** Ajout d'un gain de compensation interne de **+20dB (x10)** sur le signal sidechain juste après le filtre passe-bas. Le curseur `Bass Gain` peut de nouveau "driver" le signal à fond dans le clipper, réveillant toute la puissance du VCA de la v1.19.
+
+
+
+## [v1.19] - 2026-06-25
+### Ajouts et Modifications
+- **Émulation VCA Analogique (Release Courbe Logarithmique)** :
+  - **Correction du "Release trop rapide" :** L'enveloppe de Sidechain était auparavant appliquée de manière *linéaire* à l'amplitude audio. Résultat : une baisse de 50% de l'enveloppe faisait remonter le volume instantanément à -6dB, ce que l'oreille perçoit comme "déjà terminé", donnant l'impression d'un release expéditif.
+  - **Nouveau comportement :** La réduction de gain est désormais calculée en décibels (comme un vrai compresseur analogique). L'enveloppe pilote les décibels. Ainsi, lorsque le compresseur relâche sa compression, le volume "gonfle" de manière beaucoup plus ronde et organique, créant cette fameuse "aspiration" (suction) propre à la House Music.
+
+
+
+## [v1.18] - 2026-06-25
+### Ajouts et Modifications
+- **Refonte DSP du Moteur de Pompage (Ducking)** : 
+  - **Correction majeure :** Suppression de la *normalisation globale* de l'enveloppe de sidechain. Auparavant, le moteur comparait le signal au kick le plus fort de toute la chanson, ce qui annulait mathématiquement le paramètre `Bass Gain` et affaiblissait drastiquement le "pompage" sur les kicks plus faibles.
+  - **Nouveau comportement :** L'enveloppe est désormais un simple *Hard Clipper*. Le `Bass Gain` agit désormais comme un véritable "Drive/Threshold" inversé. Pousser le curseur sature le signal de détection contre le plafond mathématique de `1.0`. Résultat : le "Ducking" s'engage à 100% à chaque coup de kick, offrant un effet de pompage constant, lourd et dévastateur typique de la French Touch.
+
+
+
 ## [v1.17] - 2026-06-18
 ### Ajouts et Modifications
 - **Fix Render.com (Erreur 132 SIGILL)** : 
